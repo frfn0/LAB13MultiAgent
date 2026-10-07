@@ -510,17 +510,36 @@ func (a *Agent) publishError(taskID string, err error) {
 	})
 }
 
-// publish отправляет результат в тему ответа.
-func (a *Agent) publish(result messages.Result) {
-	// Экземпляр проставляется здесь, а не в обработчике: тогда и успешный
-	// ответ, и ответ с ошибкой называют того, кто их отправил.
+// prepareResult проставляет идентификатор экземпляра и сериализует
+// результат.
+//
+// Экземпляр проставляется здесь, а не в обработчике задания: тогда и
+// успешный ответ, и ответ с ошибкой называют того, кто их отправил.
+// Отдельно от публикации - чтобы результат можно было проверить в тестах
+// без подключения к NATS.
+func (a *Agent) prepareResult(result messages.Result) ([]byte, error) {
 	if result.Instance == "" {
 		result.Instance = a.cfg.Instance
 	}
 
-	payload, err := json.Marshal(result)
+	return json.Marshal(result)
+}
+
+// publish отправляет результат в тему ответа.
+func (a *Agent) publish(result messages.Result) {
+	payload, err := a.prepareResult(result)
 	if err != nil {
 		a.logger.Error("результат не сериализован", "error", err)
+		return
+	}
+
+	if !a.connected() {
+		// Без соединения отправлять некуда. Раньше здесь был вызов по
+		// пустому указателю: агент без соединения падал, а в тестах
+		// обработку задания нельзя было проверить вовсе.
+		a.logger.Warn("результат не отправлен: нет соединения с NATS",
+			"task_id", result.TaskID,
+		)
 		return
 	}
 

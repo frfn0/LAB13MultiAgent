@@ -29,6 +29,11 @@ from api.state import AppState, StateError
 
 logger = logging.getLogger(__name__)
 
+# Название константы 422 менялось между версиями starlette, поэтому код
+# задан прямо: иначе на новой версии появляется предупреждение об
+# устаревшем имени.
+HTTP_UNPROCESSABLE = 422
+
 TITLE = "Лабораторная работа №13: API запуска задач"
 DESCRIPTION = (
     "Принимает обращения клиентов, проводит их через агентов "
@@ -179,7 +184,7 @@ def create_app(state: AppState | None = None) -> FastAPI:
         """Отдаёт последние обработанные обращения."""
         if not 1 <= limit <= 100:
             return JSONResponse(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=HTTP_UNPROCESSABLE,
                 content=ErrorResponse(
                     error="limit должен быть от 1 до 100",
                     detail="неверный параметр",

@@ -59,21 +59,28 @@ func significantWords(text string) []string {
 	return words
 }
 
-// minStemLength - минимальная длина общего начала двух слов, при которой
+// minCommonPrefix - минимальная длина общего начала двух слов, при которой
 // они считаются совпадением. Нужна из-за русских окончаний: запрос
 // «оплатить» должен находить статью со словом «оплата».
-const minStemLength = 4
+const minCommonPrefix = 4
 
-// stem обрезает слово до основы: отсекает окончание, оставляя не менее
-// minStemLength символов.
-func stem(word string) string {
-	runes := []rune(word)
-	if len(runes) <= minStemLength {
-		return word
+// commonPrefixLength возвращает длину общего начала двух слов в символах
+// Unicode, а не в байтах: иначе кириллица считалась бы вдвое длиннее.
+func commonPrefixLength(first, second string) int {
+	firstRunes := []rune(first)
+	secondRunes := []rune(second)
+
+	limit := len(firstRunes)
+	if len(secondRunes) < limit {
+		limit = len(secondRunes)
 	}
-	// Слова короче основы не режем: «карта» и «карту» режутся одинаково,
-	// а вот короткое слово лучше сравнивать целиком.
-	return string(runes[:len(runes)-2])
+
+	length := 0
+	for length < limit && firstRunes[length] == secondRunes[length] {
+		length++
+	}
+
+	return length
 }
 
 // words extracts words of the text in lower case.
@@ -93,14 +100,11 @@ func sameWord(query, candidate string) bool {
 		return true
 	}
 
-	queryStem := stem(query)
-	candidateStem := stem(candidate)
-
-	if len([]rune(queryStem)) < minStemLength || len([]rune(candidateStem)) < minStemLength {
-		return false
-	}
-
-	return queryStem == candidateStem
+	// Сравнивается общее начало, а не основы, отрезанные на одинаковое
+	// число символов: у слов разной длины основы не совпадают. «оплата»
+	// и «оплатить» при отрезании двух символов дают «опла» и «оплати»,
+	// и запрос «оплатить» переставал находить статью про оплату.
+	return commonPrefixLength(query, candidate) >= minCommonPrefix
 }
 
 // confidence считает долю значимых слов запроса, встречающихся в статье.
