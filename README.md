@@ -65,7 +65,14 @@
 │   └── demo_api.py             проверка API по HTTP
 ├── knowledge_base/
 │   └── articles.json          десять статей базы знаний
-├── tests/                      тесты Go и Python
+├── tests/                      модульные тесты оркестратора (pytest)
+│   ├── conftest.py             моки NATS и общие фикстуры
+│   ├── test_messages.py        контракт сообщений
+│   ├── test_client.py          обмен с NATS
+│   ├── test_retry.py           повторная отправка заданий
+│   ├── test_metrics.py         сбор метрик агентов
+│   ├── test_pipeline.py        конвейер обработки обращения
+│   └── test_api.py             REST API
 └── results/                    фактический вывод запусков
 ```
 
@@ -913,3 +920,109 @@ python -m api.demo_api
 
 Фактический вывод: [results/task8_result.txt](results/task8_result.txt),
 лог прогона: [results/task8_output.txt](results/task8_output.txt)
+
+---
+
+## Задание 9. Тестирование системы
+
+### Что сделано
+
+46 тестов на Go (стандартный пакет `testing`) и 101 тест на Python (`pytest`
+с моками NATS). Брокер в тестах не участвует: подключение подменяется объектом
+с тем же интерфейсом, а сообщения метрик собираются напрямую. Так проверяется
+собственная логика — раздача ответов ожидающим заданиям по `task_id`, повторы,
+сбор метрик, маршруты API.
+
+Тесты агентов на Go:
+
+| Файл | Тестов | Что проверяется |
+|------|--------|-----------------|
+| `pkg/messages/messages_test.go` | 6 | контракт: JSON задания и ответа, пропуск пустых полей, разбор ошибки агента и метрик, стабильность тем |
+| `pkg/agent/agent_test.go` | 16 | настройки из окружения, отказ на неверных значениях, обработка задания, битый JSON, искусственные сбои, счётчики, лог в файл |
+| `agents/classifier/main_test.go` | 13 | правила классификации, приоритеты и теги, отказ на пустом тексте, порядок правил |
+| `agents/knowledge/main_test.go` | 19 | значимые слова, общее начало слов, сопоставление по нему, поиск по настоящей базе знаний, влияние категории |
+| `agents/responder/main_test.go` | 11 | выбор типа ответа, подсказки по категориям, пометка срочности |
+| `agents/escalation/main_test.go` | 3 | формат номера эскалации, уникальность номеров |
+
+Тесты оркестратора на Python:
+
+| Файл | Тестов | Что проверяется |
+|------|--------|-----------------|
+| `tests/test_messages.py` | 15 | контракт на стороне Python: темы, обязательные поля, значения констант |
+| `tests/test_client.py` | 16 | подключение, раздача ответов по `task_id`, таймаут, ошибка агента, битый ответ, ответ на неизвестное задание |
+| `tests/test_retry.py` | 22 | политика повторов, геометрическая пауза, классификация ошибок, число попыток |
+| `tests/test_metrics.py` | 13 | разбор снимков метрик, разделение экземпляров, запрет уменьшения счётчиков |
+| `tests/test_pipeline.py` | 20 | порядок шагов и тем, эскалация, замена ответа клиенту, отчёт при таймауте |
+| `tests/test_api.py` | 22 | коды 200/202/422/502/503/504, соответствие тела схеме, проверка входа, OpenAPI |
+
+### Запуск
+
+```bash
+go test ./...
+go test ./... -cover
+
+python -m pytest tests/
+python -m pytest tests/ --cov=orchestrator --cov=api --cov-report=term-missing
+```
+
+### Фактический вывод
+
+```
+ok      github.com/frfn0/LAB13MultiAgent/agents/classifier     0.446s
+ok      github.com/frfn0/LAB13MultiAgent/agents/escalation     0.506s
+ok      github.com/frfn0/LAB13MultiAgent/agents/knowledge      0.603s
+ok      github.com/frfn0/LAB13MultiAgent/agents/responder      0.508s
+ok      github.com/frfn0/LAB13MultiAgent/pkg/agent             0.560s
+ok      github.com/frfn0/LAB13MultiAgent/pkg/messages          0.401s
+
+101 passed in 2.93s
+```
+
+Покрытие библиотечного кода — 86–100%:
+
+```
+api/app.py                       68   9   87%
+api/schemas.py                   42   0  100%
+api/state.py                     97  14   86%
+orchestrator/client.py          108   8   93%
+orchestrator/config.py           25   0  100%
+orchestrator/messages.py         60   0  100%
+orchestrator/metrics.py          89   4   96%
+orchestrator/pipeline.py         75   5   93%
+orchestrator/retry.py            67   3   96%
+```
+
+У скриптов запуска (`demo_*.py`, `harness.py`, `main.py`) покрытие нулевое
+намеренно: это демонстрации, их работа проверяется фактическим выводом в
+`results/`.
+
+### Что пришлось исправить по итогам тестов
+
+Сопоставление слов в агенте поиска по базе знаний. Функция `sameWord`
+обрезала окончание ровно на два символа и сравнивала основы: у слов разной
+длины основы не совпадают, поэтому «оплата» давала «опла», а «оплатить» —
+«оплати». Собственный пример из задания 4 («оплатить» против «оплата») не
+работал. Сравнение переведено на общее начало длиной не менее четырёх
+символов — это то, что обещала документация. После исправления
+перепрогнаны демонстрации заданий 4, 5 и 8: уверенности и выбранные статьи
+не изменились (0.8, 1.0, 1.0, 1.0, 0.4).
+
+Публикация результата агента. Метод `publish` вызывал `Publish` по пустому
+указателю, если соединения с NATS нет. Публикация разделена на
+подготовку результата (`prepareResult`) и отправку: подготовку видно в
+тестах, а отсутствие соединения приводит к предупреждению, а не к падению.
+
+Константа 422 в API: имя `HTTP_422_UNPROCESSABLE_ENTITY` в starlette 1.0
+помечено как устаревшее, поэтому код задан прямо.
+
+### Проверки качества кода
+
+```bash
+go build ./... && go vet ./... && gofmt -l . && go test ./...
+ruff check api tests orchestrator
+python -m pytest tests/
+```
+
+Фактический вывод: [results/task9_result.txt](results/task9_result.txt),
+логи прогонов: [results/task9_go_tests.txt](results/task9_go_tests.txt),
+[results/task9_python_tests.txt](results/task9_python_tests.txt)
