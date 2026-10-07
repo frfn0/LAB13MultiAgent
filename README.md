@@ -57,6 +57,8 @@
 │   ├── demo_metrics.py         демонстрация логирования и мониторинга
 │   ├── demo_retry.py           демонстрация повторов и таймаутов
 │   └── demo_instances.py       демонстрация нескольких экземпляров агента
+├── docs/
+│   └── architecture.md        диаграммы и описание компонентов
 ├── api/                        REST API на FastAPI
 │   ├── app.py                  маршруты, обработчики ошибок, middleware
 │   ├── state.py                подключение к NATS, метрики, хранилище
@@ -75,6 +77,38 @@
 │   └── test_api.py             REST API
 └── results/                    фактический вывод запусков
 ```
+
+---
+
+## Архитектура
+
+Обращение проходит через четыре агента: классификация тикета, поиск статьи в
+базе знаний, ответ клиенту и — если закрыть обращение автоматически не вышло —
+эскалация человеку.
+
+```mermaid
+flowchart LR
+    client["Клиент"] --> api["REST API<br/>api/"]
+    api --> orch["Оркестратор<br/>orchestrator/"]
+    orch --> nats[("NATS")]
+    nats --> classifier["Классификация<br/>agents/classifier"]
+    nats --> knowledge["База знаний<br/>agents/knowledge"]
+    nats --> responder["Ответ клиенту<br/>agents/responder"]
+    nats --> escalation["Эскалация<br/>agents/escalation"]
+    knowledge --> kb[("knowledge_base/<br/>articles.json")]
+    classifier --> nats
+    knowledge --> nats
+    responder --> nats
+    escalation --> nats
+    nats --> orch
+```
+
+Подробное описание системы — диаграммы компонентов, последовательности
+обращения, повторов, форматы сообщений, настройки и ограничения — в
+[docs/architecture.md](docs/architecture.md).
+
+Соответствие документации коду проверяется тестами: темы NATS, компоненты,
+упомянутые файлы и значения по умолчанию сверяются с исходниками.
 
 ---
 
@@ -468,7 +502,7 @@ ruff check orchestrator
 |------------|------------|--------------|
 | `LOG_FILE` | путь к файлу лога | не задан, только stderr |
 | `LOG_LEVEL` | `DEBUG` включает подробные записи | `INFO` |
-| `METRICS_INTERVAL` | период публикации метрик | `5s` |
+| `METRICS_INTERVAL` | период публикации метрик | `10s` |
 | `INSTANCE_ID` | идентификатор экземпляра агента | `<хост>:0` |
 
 ### Запуск
