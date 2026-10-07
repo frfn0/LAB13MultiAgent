@@ -12,7 +12,6 @@ import uuid
 from typing import Any
 
 from orchestrator.client import NatsConnection, TaskTimeoutError
-from orchestrator.metrics import MetricsCollector
 from orchestrator.messages import (
     SUBJECT_ANSWER,
     SUBJECT_CLASSIFY,
@@ -26,6 +25,8 @@ from orchestrator.messages import (
     Task,
     Ticket,
 )
+from orchestrator.metrics import MetricsCollector
+from orchestrator.retry import RetryPolicy, send_with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -50,13 +51,14 @@ async def classify(
     connection: NatsConnection,
     ticket: Ticket,
     timeout: float,
+    policy: RetryPolicy | None = None,
     metrics: MetricsCollector | None = None,
 ) -> Result:
     """Шаг 1: классификация обращения."""
     task = _new_task(TASK_CLASSIFY, ticket)
-    if metrics is not None:
-        metrics.count_sent()
-    return await connection.send_task(SUBJECT_CLASSIFY, task, timeout=timeout)
+    return await send_with_retry(
+        connection, SUBJECT_CLASSIFY, task, timeout, metrics, policy
+    )
 
 
 async def find_article(
@@ -66,15 +68,16 @@ async def find_article(
     priority: int,
     tags: list[str],
     timeout: float,
+    policy: RetryPolicy | None = None,
     metrics: MetricsCollector | None = None,
 ) -> Result:
     """Шаг 2: поиск статьи базы знаний."""
     task = _new_task(
         TASK_KNOWLEDGE, ticket, category=category, priority=priority, tags=tags
     )
-    if metrics is not None:
-        metrics.count_sent()
-    return await connection.send_task(SUBJECT_KNOWLEDGE, task, timeout=timeout)
+    return await send_with_retry(
+        connection, SUBJECT_KNOWLEDGE, task, timeout, metrics, policy
+    )
 
 
 async def make_answer(
@@ -84,6 +87,7 @@ async def make_answer(
     priority: int,
     article: Result,
     timeout: float,
+    policy: RetryPolicy | None = None,
     metrics: MetricsCollector | None = None,
 ) -> Result:
     """Шаг 3: формирование ответа клиенту."""
@@ -98,9 +102,9 @@ async def make_answer(
         solution=article.solution,
         confidence=article.confidence,
     )
-    if metrics is not None:
-        metrics.count_sent()
-    return await connection.send_task(SUBJECT_ANSWER, task, timeout=timeout)
+    return await send_with_retry(
+        connection, SUBJECT_ANSWER, task, timeout, metrics, policy
+    )
 
 
 async def escalate(
@@ -110,6 +114,7 @@ async def escalate(
     priority: int,
     reason: str,
     timeout: float,
+    policy: RetryPolicy | None = None,
     metrics: MetricsCollector | None = None,
 ) -> Result:
     """Шаг 4: эскалация обращения."""
@@ -120,9 +125,9 @@ async def escalate(
         priority=priority,
         reason=reason,
     )
-    if metrics is not None:
-        metrics.count_sent()
-    return await connection.send_task(SUBJECT_ESCALATE, task, timeout=timeout)
+    return await send_with_retry(
+        connection, SUBJECT_ESCALATE, task, timeout, metrics, policy
+    )
 
 
 async def run_pipeline(
@@ -130,8 +135,16 @@ async def run_pipeline(
     text: str,
     timeout: float = 5.0,
     metrics: MetricsCollector | None = None,
+    policy: RetryPolicy | None = None,
 ) -> dict[str, Any]:
     """Проводит обращение через весь конвейер.
+
+    Args:
+        connection: подключение к NATS.
+        text: текст обращения клиента.
+        timeout: сколько ждать ответа агента на одну попытку, секунды.
+        metrics: счётчики попыток и повторов.
+        policy: параметры повторной отправки при сбое агента.
 
     Returns:
         Словарь с результатом каждого шага и итоговым ответом клиенту.
@@ -144,7 +157,7 @@ async def run_pipeline(
     }
 
     # Шаг 1: классификация
-    classified = await classify(connection, ticket, timeout, metrics)
+    classified = await classify(connection, ticket, timeout, metrics, policy)
     report["category"] = classified.category
     report["priority"] = classified.priority
     report["tags"] = classified.tags
@@ -169,6 +182,7 @@ async def run_pipeline(
         classified.tags,
         timeout,
         metrics,
+        policy,
     )
     report["article_found"] = article.found
     report["article_title"] = article.article_title
@@ -196,6 +210,7 @@ async def run_pipeline(
         article,
         timeout,
         metrics,
+        policy,
     )
     report["answer"] = answer.answer
     report["answer_type"] = answer.answer_type
@@ -224,6 +239,7 @@ async def run_pipeline(
             reason,
             timeout,
             metrics,
+            policy,
         )
         report["escalated"] = True
         report["escalation_id"] = escalation.escalation_id
@@ -263,14 +279,15 @@ async def run_pipeline_safe(
     text: str,
     timeout: float = 5.0,
     metrics: MetricsCollector | None = None,
+    policy: RetryPolicy | None = None,
 ) -> dict[str, Any]:
     """Обёртка конвейера: сбои не поднимаются наружу, а попадают в отчёт."""
     try:
-        return await run_pipeline(connection, text, timeout, metrics)
+        return await run_pipeline(connection, text, timeout, metrics, policy)
     except TaskTimeoutError as exc:
         logger.error("шаг конвейера не уложился в таймаут: %s", exc)
         if metrics is not None:
-            metrics.count_timeout()
+            # Таймаут уже посчитан в retry.py, здесь считаем сам провал шага.
             metrics.count_failed()
         return {"ticket_id": None, "text": text, "success": False, "error": str(exc)}
     except Exception as exc:  # noqa: BLE001 - отчёт должен быть всегда

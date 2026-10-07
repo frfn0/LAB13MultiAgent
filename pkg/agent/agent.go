@@ -14,6 +14,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -26,6 +27,10 @@ import (
 
 // ErrInvalidTask - задание не прошло проверку и не может быть обработано.
 var ErrInvalidTask = errors.New("задание некорректно")
+
+// ErrInjectedFault - искусственный сбой, включённый переменными FAULT_*.
+// Нужен, чтобы показать, как оркестратор повторяет задание при сбое агента.
+var ErrInjectedFault = errors.New("искусственный сбой агента для проверки повторов")
 
 // Handler обрабатывает одно задание и возвращает результат.
 //
@@ -54,6 +59,53 @@ type Config struct {
 	// MetricsInterval - как часто публиковать счётчики. Ноль отключает
 	// публикацию.
 	MetricsInterval time.Duration
+	// Fault - искусственные сбои агента для проверки повторов и таймаутов.
+	Fault Fault
+}
+
+// Fault - искусственные сбои агента.
+//
+// По умолчанию агент работает без вмешательства. Переменные окружения
+// FAULT_FAIL_ATTEMPTS, FAULT_DELAY_MS и FAULT_DROP включают сбои, чтобы
+// можно было проверить, как оркестратор ведёт себя при сбое агента.
+type Fault struct {
+	// FailAttempts - сколько первых заданий агент выполнит с ошибкой.
+	FailAttempts int
+	// Delay - задержка перед обработкой задания.
+	Delay time.Duration
+	// Drop - если true, агент принимает задание, но не отвечает на него.
+	// Оркестратор должен упереться в таймаут.
+	Drop bool
+}
+
+// enabled сообщает, включены ли искусственные сбои.
+func (f Fault) enabled() bool {
+	return f.FailAttempts > 0 || f.Delay > 0 || f.Drop
+}
+
+// loadFault читает параметры искусственных сбоев из переменных окружения.
+func loadFault() (Fault, error) {
+	var fault Fault
+
+	if raw := os.Getenv("FAULT_FAIL_ATTEMPTS"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 0 {
+			return Fault{}, fmt.Errorf("FAULT_FAIL_ATTEMPTS некорректен: %q", raw)
+		}
+		fault.FailAttempts = parsed
+	}
+
+	if raw := os.Getenv("FAULT_DELAY_MS"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 0 {
+			return Fault{}, fmt.Errorf("FAULT_DELAY_MS некорректен: %q", raw)
+		}
+		fault.Delay = time.Duration(parsed) * time.Millisecond
+	}
+
+	fault.Drop = os.Getenv("FAULT_DROP") == "1"
+
+	return fault, nil
 }
 
 // LoadConfig читает настройки агента из переменных окружения.
@@ -78,6 +130,11 @@ func LoadConfig(name, subject, queue string) (Config, error) {
 		interval = parsed
 	}
 
+	fault, err := loadFault()
+	if err != nil {
+		return Config{}, err
+	}
+
 	return Config{
 		Name:            name,
 		Subject:         subject,
@@ -87,6 +144,7 @@ func LoadConfig(name, subject, queue string) (Config, error) {
 		Verbose:         verbose,
 		Instance:        instance,
 		MetricsInterval: interval,
+		Fault:           fault,
 	}, nil
 }
 
@@ -139,6 +197,8 @@ type Agent struct {
 	handler Handler
 	// closeLog закрывает файл лога при остановке агента.
 	closeLog func()
+	// faultHits - сколько раз сработал искусственный сбой FAULT_FAIL_ATTEMPTS.
+	faultHits atomic.Int64
 }
 
 // New создаёт агента и готовит логгер.
@@ -220,6 +280,14 @@ func (a *Agent) Run(ctx context.Context) error {
 		"queue", a.cfg.Queue,
 		"nats", a.cfg.NatsURL,
 	)
+
+	if a.cfg.Fault.enabled() {
+		a.logger.Warn("включены искусственные сбои агента",
+			"fail_attempts", a.cfg.Fault.FailAttempts,
+			"delay", a.cfg.Fault.Delay.String(),
+			"drop", a.cfg.Fault.Drop,
+		)
+	}
 
 	handler := func(msg *nats.Msg) {
 		a.handleMessage(ctx, msg)
@@ -355,6 +423,46 @@ func (a *Agent) handleMessage(ctx context.Context, msg *nats.Msg) {
 		a.stats.Failed.Add(1)
 		a.logger.Error("в задании нет идентификатора тикета", "task_id", task.ID)
 		a.publishError(task.ID, ErrInvalidTask)
+		return
+	}
+
+	// Искусственные сбои: так проверяется поведение оркестратора при
+	// сбое агента. По умолчанию выключены.
+	if a.cfg.Fault.Drop {
+		// Задание принято, но ответа не будет - так ведёт себя агент,
+		// который завис. Оркестратор должен упереться в таймаут.
+		a.logger.Warn("ответ на задание не будет отправлен",
+			"task_id", task.ID,
+			"ticket", task.Ticket.ID,
+			"reason", "FAULT_DROP",
+		)
+		return
+	}
+
+	if a.cfg.Fault.Delay > 0 {
+		select {
+		case <-ctx.Done():
+			a.logger.Warn("задание снято во время искусственной задержки",
+				"task_id", task.ID,
+			)
+			return
+		case <-time.After(a.cfg.Fault.Delay):
+		}
+	}
+
+	if a.cfg.Fault.FailAttempts > 0 && a.faultHits.Load() < int64(a.cfg.Fault.FailAttempts) {
+		a.faultHits.Add(1)
+		a.stats.Failed.Add(1)
+		a.logger.Warn("искусственный сбой агента",
+			"task_id", task.ID,
+			"ticket", task.Ticket.ID,
+			"fail_attempts", a.cfg.Fault.FailAttempts,
+		)
+		a.publish(messages.Result{
+			TaskID: task.ID,
+			Agent:  a.cfg.Name,
+			Error:  ErrInjectedFault.Error(),
+		})
 		return
 	}
 

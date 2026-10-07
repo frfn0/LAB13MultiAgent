@@ -70,9 +70,12 @@ class MetricsCollector:
     stats: dict[str, AgentStats] = field(default_factory=dict)
 
     # Счётчики самого оркестратора.
+    # tasks_sent считает попытки отправки, а не задания: с повторами
+    # одно задание занимает несколько попыток.
     tasks_sent: int = 0
     tasks_failed: int = 0
     timeouts: int = 0
+    retries: int = 0
 
     async def on_metrics(self, msg: Msg) -> None:
         """Обрабатывает публикацию метрик агента."""
@@ -148,6 +151,7 @@ class MetricsCollector:
                 "tasks_sent": self.tasks_sent,
                 "tasks_failed": self.tasks_failed,
                 "timeouts": self.timeouts,
+                "retries": self.retries,
             },
             "agents": self.by_agent(),
         }
@@ -163,6 +167,10 @@ class MetricsCollector:
     def count_timeout(self) -> None:
         """Задание не уложилось в таймаут."""
         self.timeouts += 1
+
+    def count_retry(self) -> None:
+        """Задание отправлено повторно после сбоя."""
+        self.retries += 1
 
     def summary_line(self) -> str:
         """Одна строка со сводкой - для вывода в лог оркестратора."""
