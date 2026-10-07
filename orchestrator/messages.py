@@ -14,6 +14,7 @@ SUBJECT_KNOWLEDGE = "ticket.knowledge"
 SUBJECT_ANSWER = "ticket.answer"
 SUBJECT_ESCALATE = "ticket.escalate"
 SUBJECT_RESULT = "ticket.result"
+SUBJECT_METRICS = "agent.metrics"
 
 # Категории обращений.
 CATEGORY_BILLING = "billing"

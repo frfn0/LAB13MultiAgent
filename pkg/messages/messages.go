@@ -17,6 +17,8 @@ const (
 	SubjectEscalate = "ticket.escalate"
 	// SubjectResult - ответ агента с результатом задания.
 	SubjectResult = "ticket.result"
+	// SubjectMetrics - периодическая публикация счётчиков агента.
+	SubjectMetrics = "agent.metrics"
 )
 
 // Категории обращений.
@@ -103,3 +105,22 @@ const (
 	AnswerResolved = "resolved"
 	AnswerDeferred = "deferred"
 )
+
+// Metrics - счётчики агента, которые агент публикует в тему
+// SubjectMetrics. Оркестратор собирает их и отдаёт через REST API.
+type Metrics struct {
+	// Agent - имя агента.
+	Agent string `json:"agent"`
+	// Queue - имя группы очереди, позволяет отличить экземпляры.
+	Queue string `json:"queue"`
+	// Instance - идентификатор процесса: имя хоста и порт запуска.
+	Instance string `json:"instance"`
+	// Received - сколько заданий получено.
+	Received int64 `json:"received"`
+	// Processed - сколько заданий успешно обработано.
+	Processed int64 `json:"processed"`
+	// Failed - сколько заданий завершилось ошибкой.
+	Failed int64 `json:"failed"`
+	// UptimeSeconds - сколько секунд работает агент.
+	UptimeSeconds int64 `json:"uptime_seconds"`
+}

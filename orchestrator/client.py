@@ -49,6 +49,20 @@ class NatsConnection:
         """Установлено ли соединение с NATS."""
         return self._nc is not None and not self._nc.is_closed
 
+    @property
+    def client(self) -> nats.NATS:
+        """Сырое подключение к NATS.
+
+        Нужно подпис��кам на дополнительные темы, например на метрики
+        агентов. Обычный код пользуется send_task.
+
+        Raises:
+            OrchestratorError: если соединения ещё нет.
+        """
+        if self._nc is None:
+            raise OrchestratorError("нет соединения с NATS")
+        return self._nc
+
     async def connect(self) -> None:
         """Подключается к NATS и подписывается на результаты."""
         if self._nc is not None:

@@ -12,6 +12,7 @@ import uuid
 from typing import Any
 
 from orchestrator.client import NatsConnection, TaskTimeoutError
+from orchestrator.metrics import MetricsCollector
 from orchestrator.messages import (
     SUBJECT_ANSWER,
     SUBJECT_CLASSIFY,
@@ -46,10 +47,15 @@ def _new_task(kind: str, ticket: Ticket, **fields: Any) -> Task:
 
 
 async def classify(
-    connection: NatsConnection, ticket: Ticket, timeout: float
+    connection: NatsConnection,
+    ticket: Ticket,
+    timeout: float,
+    metrics: MetricsCollector | None = None,
 ) -> Result:
     """Шаг 1: классификация обращения."""
     task = _new_task(TASK_CLASSIFY, ticket)
+    if metrics is not None:
+        metrics.count_sent()
     return await connection.send_task(SUBJECT_CLASSIFY, task, timeout=timeout)
 
 
@@ -60,11 +66,14 @@ async def find_article(
     priority: int,
     tags: list[str],
     timeout: float,
+    metrics: MetricsCollector | None = None,
 ) -> Result:
     """Шаг 2: поиск статьи базы знаний."""
     task = _new_task(
         TASK_KNOWLEDGE, ticket, category=category, priority=priority, tags=tags
     )
+    if metrics is not None:
+        metrics.count_sent()
     return await connection.send_task(SUBJECT_KNOWLEDGE, task, timeout=timeout)
 
 
@@ -75,6 +84,7 @@ async def make_answer(
     priority: int,
     article: Result,
     timeout: float,
+    metrics: MetricsCollector | None = None,
 ) -> Result:
     """Шаг 3: формирование ответа клиенту."""
     task = _new_task(
@@ -88,6 +98,8 @@ async def make_answer(
         solution=article.solution,
         confidence=article.confidence,
     )
+    if metrics is not None:
+        metrics.count_sent()
     return await connection.send_task(SUBJECT_ANSWER, task, timeout=timeout)
 
 
@@ -98,6 +110,7 @@ async def escalate(
     priority: int,
     reason: str,
     timeout: float,
+    metrics: MetricsCollector | None = None,
 ) -> Result:
     """Шаг 4: эскалация обращения."""
     task = _new_task(
@@ -107,6 +120,8 @@ async def escalate(
         priority=priority,
         reason=reason,
     )
+    if metrics is not None:
+        metrics.count_sent()
     return await connection.send_task(SUBJECT_ESCALATE, task, timeout=timeout)
 
 
@@ -114,6 +129,7 @@ async def run_pipeline(
     connection: NatsConnection,
     text: str,
     timeout: float = 5.0,
+    metrics: MetricsCollector | None = None,
 ) -> dict[str, Any]:
     """Проводит обращение через весь конвейер.
 
@@ -128,7 +144,7 @@ async def run_pipeline(
     }
 
     # Шаг 1: классификация
-    classified = await classify(connection, ticket, timeout)
+    classified = await classify(connection, ticket, timeout, metrics)
     report["category"] = classified.category
     report["priority"] = classified.priority
     report["tags"] = classified.tags
@@ -152,6 +168,7 @@ async def run_pipeline(
         classified.priority,
         classified.tags,
         timeout,
+        metrics,
     )
     report["article_found"] = article.found
     report["article_title"] = article.article_title
@@ -178,6 +195,7 @@ async def run_pipeline(
         classified.priority,
         article,
         timeout,
+        metrics,
     )
     report["answer"] = answer.answer
     report["answer_type"] = answer.answer_type
@@ -205,6 +223,7 @@ async def run_pipeline(
             classified.priority,
             reason,
             timeout,
+            metrics,
         )
         report["escalated"] = True
         report["escalation_id"] = escalation.escalation_id
@@ -243,13 +262,19 @@ async def run_pipeline_safe(
     connection: NatsConnection,
     text: str,
     timeout: float = 5.0,
+    metrics: MetricsCollector | None = None,
 ) -> dict[str, Any]:
     """Обёртка конвейера: сбои не поднимаются наружу, а попадают в отчёт."""
     try:
-        return await run_pipeline(connection, text, timeout)
+        return await run_pipeline(connection, text, timeout, metrics)
     except TaskTimeoutError as exc:
         logger.error("шаг конвейера не уложился в таймаут: %s", exc)
+        if metrics is not None:
+            metrics.count_timeout()
+            metrics.count_failed()
         return {"ticket_id": None, "text": text, "success": False, "error": str(exc)}
     except Exception as exc:  # noqa: BLE001 - отчёт должен быть всегда
         logger.exception("конвейер завершился с ошибкой")
+        if metrics is not None:
+            metrics.count_failed()
         return {"ticket_id": None, "text": text, "success": False, "error": str(exc)}

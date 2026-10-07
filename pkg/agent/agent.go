@@ -14,6 +14,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -47,6 +48,12 @@ type Config struct {
 	LogFile string
 	// Verbose - уровень логирования DEBUG вместо INFO.
 	Verbose bool
+	// Instance - идентификатор процесса. Нужен, чтобы отличить
+	// несколько экземпляров одного агента в метриках.
+	Instance string
+	// MetricsInterval - как часто публиковать счётчики. Ноль отключает
+	// публикацию.
+	MetricsInterval time.Duration
 }
 
 // LoadConfig читает настройки агента из переменных окружения.
@@ -58,19 +65,41 @@ func LoadConfig(name, subject, queue string) (Config, error) {
 		return Config{}, errors.New("тема подписки не задана")
 	}
 
-	verbose := false
-	if os.Getenv("LOG_LEVEL") == "DEBUG" {
-		verbose = true
+	verbose := os.Getenv("LOG_LEVEL") == "DEBUG"
+
+	instance := envOr("INSTANCE_ID", defaultInstanceID())
+
+	interval := 10 * time.Second
+	if raw := os.Getenv("METRICS_INTERVAL"); raw != "" {
+		parsed, err := time.ParseDuration(raw)
+		if err != nil {
+			return Config{}, fmt.Errorf("METRICS_INTERVAL некорректен: %w", err)
+		}
+		interval = parsed
 	}
 
 	return Config{
-		Name:    name,
-		Subject: subject,
-		Queue:   queue,
-		NatsURL: envOr("NATS_URL", nats.DefaultURL),
-		LogFile: os.Getenv("LOG_FILE"),
-		Verbose: verbose,
+		Name:            name,
+		Subject:         subject,
+		Queue:           queue,
+		NatsURL:         envOr("NATS_URL", nats.DefaultURL),
+		LogFile:         os.Getenv("LOG_FILE"),
+		Verbose:         verbose,
+		Instance:        instance,
+		MetricsInterval: interval,
 	}, nil
+}
+
+// defaultInstanceID строит идентификатор процесса из имени хоста и порта
+// запуска агента. Нужен, чтобы в метриках различались экземпляры одного
+// агента - см. задание 7.
+func defaultInstanceID() string {
+	host, err := os.Hostname()
+	if err != nil || host == "" {
+		host = "unknown"
+	}
+
+	return fmt.Sprintf("%s:%s", host, envOr("AGENT_PORT", "0"))
 }
 
 func envOr(name, fallback string) string {
@@ -211,6 +240,8 @@ func (a *Agent) Run(ctx context.Context) error {
 		return fmt.Errorf("не удалось подтвердить подписку: %w", err)
 	}
 
+	stopMetrics := a.startMetricsPublishing(ctx)
+
 	<-ctx.Done()
 	a.logger.Info("агент останавливается", "agent", a.cfg.Name)
 
@@ -219,9 +250,93 @@ func (a *Agent) Run(ctx context.Context) error {
 		a.logger.Warn("дренирование не завершилось", "error", err)
 	}
 
-	stats := a.stats.Snapshot()
-	a.logger.Info("итоговые счётчики", "stats", stats)
+	stopMetrics()
+
+	a.logger.Info("итоговые счётчики", "stats", a.stats.Snapshot())
 	return nil
+}
+
+// startMetricsPublishing начинает периодическую публикацию счётчиков в тему
+// agent.metrics. Возвращает функцию остановки.
+func (a *Agent) startMetricsPublishing(_ context.Context) func() {
+	if a.cfg.MetricsInterval <= 0 {
+		a.logger.Info("публикация метрик отключена", "agent", a.cfg.Name)
+		return func() {}
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	// Отдельный контекст: остановка агента не должна обрывать последнюю
+	// публикацию, она нужна после Drain.
+	publisherCtx, cancel := context.WithCancel(context.Background())
+
+	go func() {
+		defer wg.Done()
+
+		ticker := time.NewTicker(a.cfg.MetricsInterval)
+		defer ticker.Stop()
+
+		// Первый снимок уходит сразу, чтобы метрики появились не позже
+		// первого тика.
+		a.publishMetrics()
+
+		for {
+			select {
+			case <-publisherCtx.Done():
+				return
+			case <-ticker.C:
+				a.publishMetrics()
+			}
+		}
+	}()
+
+	a.logger.Info("публикация метрик запущена",
+		"agent", a.cfg.Name,
+		"interval", a.cfg.MetricsInterval.String(),
+	)
+
+	return func() {
+		// Финальный снимок после остановки агента.
+		a.publishMetrics()
+		cancel()
+		wg.Wait()
+	}
+}
+
+// publishMetrics отправляет текущие счётчики в тему метрик.
+func (a *Agent) publishMetrics() {
+	if !a.connected() {
+		return
+	}
+
+	payload, err := json.Marshal(a.Metrics())
+	if err != nil {
+		a.logger.Error("метрики не сериализованы", "error", err)
+		return
+	}
+
+	if err := a.nc.Publish(messages.SubjectMetrics, payload); err != nil {
+		a.logger.Error("метрики не отправлены", "error", err)
+	}
+}
+
+// Metrics возвращает счётчики агента в виде структуры сообщений.
+func (a *Agent) Metrics() messages.Metrics {
+	return messages.Metrics{
+		Agent:         a.cfg.Name,
+		Queue:         a.cfg.Queue,
+		Instance:      a.cfg.Instance,
+		Received:      a.stats.Received.Load(),
+		Processed:     a.stats.Processed.Load(),
+		Failed:        a.stats.Failed.Load(),
+		UptimeSeconds: int64(time.Since(a.stats.StartedAt).Seconds()),
+	}
+}
+
+// connected проверяет, что соединение с NATS живо.
+func (a *Agent) connected() bool {
+	return a.nc != nil && !a.nc.IsClosed()
 }
 
 // handleMessage разбирает задание, вызывает обработчик и публикует результат.
