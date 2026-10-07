@@ -58,6 +58,11 @@
 │   ├── demo_retry.py           демонстрация повторов и таймаутов
 │   └── demo_instances.py       демонстрация нескольких экземпляров агента
 ├── api/                        REST API на FastAPI
+│   ├── app.py                  маршруты, обработчики ошибок, middleware
+│   ├── state.py                подключение к NATS, метрики, хранилище
+│   ├── schemas.py              схемы запросов и ответов
+│   ├── main.py                 запуск сервера uvicorn
+│   └── demo_api.py             проверка API по HTTP
 ├── knowledge_base/
 │   └── articles.json          десять статей базы знаний
 ├── tests/                      тесты Go и Python
@@ -752,3 +757,159 @@ python -m orchestrator.demo_retry
 
 Фактический вывод: [results/task7_result.txt](results/task7_result.txt),
 лог прогона: [results/task7_output.txt](results/task7_output.txt)
+
+---
+
+## Задание 8. Создание API для запуска задач
+
+### Что сделано
+
+REST API на FastAPI принимает обращение клиента, проводит его через
+оркестратор и агентов и возвращает ответ: HTTP → API → оркестратор → агенты →
+ответ.
+
+Логика вынесена из HTTP-слоя в `api/state.py`: класс `AppState` отвечает за
+подключение к NATS, метрики агентов и хранение результатов и не зависит от
+FastAPI, поэтому её можно проверять в тестах без запуска сервера. Само
+приложение собирается функцией `create_app(state)`, которой в тестах
+передаётся состояние с подменёнными зависимостями.
+
+| Метод | Путь | Назначение |
+|-------|------|------------|
+| `GET` | `/health` | состояние API, NATS и список агентов |
+| `GET` | `/api/agents` | метрики агентов и счётчики оркестратора |
+| `POST` | `/api/tickets` | обработать обращение и вернуть ответ клиенту |
+| `POST` | `/api/tickets/async` | принять обращение в работу, вернуть его номер |
+| `GET` | `/api/tickets` | последние обработанные обращения |
+| `GET` | `/api/tickets/{ticket_id}` | результат одного обращения |
+
+Коды ответа выбраны по смыслу сбоя: 200 — обработано, 202 — принято в
+асинхронную обработку, 422 — запрос не прошёл проверку, 502 — агент ответил
+ошибкой, 503 — нет соединения с NATS, 504 — агент не ответил за отведённое
+время.
+
+Тело запроса проверяется схемой: от 5 до 2000 символов, лишние поля
+запрещены. Middleware пишет метод, путь, код и время обработки; время также
+возвращается в заголовке `X-Process-Time-Ms`.
+
+### Запуск
+
+```powershell
+docker compose up -d
+python -m api.main
+```
+
+API доступен на `http://127.0.0.1:8000`, документация OpenAPI — на
+`http://127.0.0.1:8000/docs` (она формируется по схемам Pydantic).
+
+Пример запроса:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/tickets \
+  -H "Content-Type: application/json" \
+  -d "{\"text\": \"Не могу оплатить заказ, карта не проходит\"}"
+```
+
+### Проверка
+
+```powershell
+python -m api.demo_api
+```
+
+Демонстрация сама собирает и поднимает агентов, запускает настоящий сервер
+отдельным процессом и обращается к нему по HTTP.
+
+### Фактический вывод
+
+Состояние сервиса и обработка обращения:
+
+```
+  GET /health
+    HTTP 200  X-Process-Time-Ms: 0.3
+    status           ok
+    nats_connected   True
+    agents           4
+    agents_list      ['classifier', 'escalation', 'knowledge', 'responder']
+
+  POST /api/tickets: Не могу оплатить заказ, карта не проходит
+    HTTP 200  X-Process-Time-Ms: 42.4
+    ticket_id        ticket-04ecfda3
+    category         billing
+    priority         4
+    article_title    Не проходит оплата банковской картой
+    confidence       0.8
+    answer_type      resolved
+    escalated        False
+    duration_ms      40.31
+```
+
+Эскалация через API — обращение уходит человеку:
+
+```
+  POST /api/tickets: Хочу обсудить условия по моему тарифу, оператор не переключает
+    HTTP 200
+    category         billing
+    confidence       0.2
+    answer_type      deferred
+    escalated        True
+    assigned_to      отдел-расчётов
+```
+
+Асинхронное принятие и забор ответа:
+
+```
+  POST /api/tickets/async
+    HTTP 202
+    ticket_id        ticket-f0d80231
+    status           accepted
+
+  GET /api/tickets/ticket-f0d80231
+    HTTP 200
+    status         completed
+    category       billing
+    answer_type    resolved
+```
+
+Метрики агентов после четырёх обращений — числа сходятся с числом заданий:
+
+```
+    агентов подключено   4
+    classifier   instance=classifier-api     обработано=4
+    knowledge    instance=knowledge-api      обработано=4
+    responder    instance=responder-api      обработано=4
+    escalation   instance=escalation-api     обработано=1
+    счётчики оркестратора {'tasks_sent': 13, 'tasks_failed': 0, 'timeouts': 0, 'retries': 0}
+```
+
+Обращения от 3 до 5 заданий сходятся: четыре обращения по три шага (12
+заданий) плюс одна эскалация, итого 13 попыток отправки.
+
+Проверки входа и отказ агента:
+
+```
+  POST /api/tickets с текстом короче 5 символов
+    HTTP 422
+  POST /api/tickets с лишним полем
+    HTTP 422
+
+  Перезапускаем агент-ответчик с FAULT_DROP=1
+  POST /api/tickets при неработающем агенте
+    HTTP 504 (ожидался 504)
+    error: агент не ответил на задание task-9fe3bbed за 1.0 сек
+```
+
+Запрос не завис: агент молчал, три попытки закончились таймаутом, клиент
+получил 504.
+
+Проверок не пройдено: 0
+
+### Проверки качества кода
+
+```bash
+go build ./... && go vet ./... && gofmt -l .
+ruff check api orchestrator
+python -m api.demo_api
+```
+
+Фактический вывод: [results/task8_result.txt](results/task8_result.txt),
+лог прогона: [results/task8_output.txt](results/task8_output.txt)
