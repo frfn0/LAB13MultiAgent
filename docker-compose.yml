@@ -1,0 +1,15 @@
+services:
+  nats:
+    image: nats:2.10-alpine
+    command: ["-js", "-m", "8222"]
+    ports:
+      # Клиентский порт для агентов и оркестратора
+      - "4222:4222"
+      # HTTP-порт мониторинга: /varz, /connz, /subsz
+      - "8222:8222"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8222/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped

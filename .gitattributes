@@ -1,0 +1,18 @@
+# Текст хранится с LF, чтобы диффы не зависели от настроек core.autocrlf
+# и чтобы gofmt и cargo fmt не ругались на смешанные переносы строк.
+*.go    text eol=lf
+*.py    text eol=lf
+*.md    text eol=lf
+*.txt   text eol=lf
+*.toml  text eol=lf
+*.mod   text eol=lf
+*.sum   text eol=lf
+*.ini   text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.json  text eol=lf
+
+# Бинарные файлы
+*.exe   binary
+*.whl   binary
+*.pyd   binary
