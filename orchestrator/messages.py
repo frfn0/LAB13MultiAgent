@@ -71,6 +71,9 @@ class Result(BaseModel):
 
     task_id: str
     agent: str = ""
+    # Идентификатор экземпляра агента: при нескольких одинаковых агентах
+    # он показывает, кто именно выполнил задание.
+    instance: str = ""
     success: bool = False
     error: str = ""
 

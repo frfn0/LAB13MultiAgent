@@ -512,6 +512,12 @@ func (a *Agent) publishError(taskID string, err error) {
 
 // publish отправляет результат в тему ответа.
 func (a *Agent) publish(result messages.Result) {
+	// Экземпляр проставляется здесь, а не в обработчике: тогда и успешный
+	// ответ, и ответ с ошибкой называют того, кто их отправил.
+	if result.Instance == "" {
+		result.Instance = a.cfg.Instance
+	}
+
 	payload, err := json.Marshal(result)
 	if err != nil {
 		a.logger.Error("результат не сериализован", "error", err)

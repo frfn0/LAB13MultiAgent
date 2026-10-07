@@ -19,24 +19,22 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
-import subprocess
 import sys
 from dataclasses import dataclass, field
-from pathlib import Path
 
 from orchestrator.client import NatsConnection
 from orchestrator.config import get_retry_policy, get_settings
 from orchestrator.demo_pipeline import DEMO_TICKETS
+from orchestrator.harness import LOG_DIR, AgentPool, build_agents
 from orchestrator.metrics import MetricsCollector
 from orchestrator.pipeline import run_pipeline_safe
 
 logger = logging.getLogger(__name__)
 
-BIN_DIR = Path(os.environ.get("AGENT_BIN_DIR", ".task6-bin"))
-LOG_DIR = Path("logs")
-
+AGENTS = ("classifier", "knowledge", "responder", "escalation")
 HEALTHY_AGENTS = ("classifier", "knowledge", "escalation")
+RESPONDER_INSTANCE = "responder-task6"
+RESPONDER_KEY = f"responder-{RESPONDER_INSTANCE}"
 TICKET = DEMO_TICKETS[0]
 
 
@@ -49,55 +47,6 @@ class Phase:
     timeout: float = 5.0
     expect_retries: int = 0
     expect_success: bool = True
-
-
-def build_agents() -> None:
-    """Собирает агентов в отдельный каталог."""
-    BIN_DIR.mkdir(parents=True, exist_ok=True)
-    for name in (*HEALTHY_AGENTS, "responder"):
-        suffix = ".exe" if os.name == "nt" else ""
-        target = BIN_DIR / f"{name}{suffix}"
-        print(f"  сборка {name} -> {target}")
-        subprocess.run(
-            ["go", "build", "-o", str(target), f"./agents/{name}"],
-            check=True,
-        )
-
-
-def agent_env(name: str, extra: dict[str, str]) -> dict[str, str]:
-    """Окружение для запуска агента."""
-    env = dict(os.environ)
-    env["INSTANCE_ID"] = f"{name}-task6"
-    env["LOG_FILE"] = str(LOG_DIR / f"{name}-task6.log")
-    env["LOG_LEVEL"] = "INFO"
-    env["METRICS_INTERVAL"] = "2s"
-    for key in ("FAULT_FAIL_ATTEMPTS", "FAULT_DELAY_MS", "FAULT_DROP"):
-        env.pop(key, None)
-    env.update(extra)
-    return env
-
-
-def start_agent(name: str, extra: dict[str, str]) -> subprocess.Popen[bytes]:
-    """Запускает агента в фоне."""
-    suffix = ".exe" if os.name == "nt" else ""
-    process = subprocess.Popen(
-        [str(BIN_DIR / f"{name}{suffix}")],
-        env=agent_env(name, extra),
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    print(f"  запущен {name} pid={process.pid} {extra if extra else '(без сбоев)'}")
-    return process
-
-
-def stop_agent(process: subprocess.Popen[bytes]) -> None:
-    """Останавливает агента и дожидается завершения."""
-    process.terminate()
-    try:
-        process.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        process.kill()
-        process.wait(timeout=5)
 
 
 def print_totals(metrics: MetricsCollector) -> dict[str, int]:
@@ -116,22 +65,27 @@ def print_totals(metrics: MetricsCollector) -> dict[str, int]:
 async def run_phase(
     connection: NatsConnection,
     phase: Phase,
-    responder: subprocess.Popen[bytes] | None,
-) -> tuple[dict, dict[str, int], subprocess.Popen[bytes]]:
+    pool: AgentPool,
+) -> tuple[dict, dict[str, int]]:
     """Проводит одну фазу и печатает результат.
 
+    Args:
+        connection: подключение к NATS.
+        phase: описание фазы.
+        pool: процессы агентов. Ответчик перезапускается на каждой фазе,
+            иначе здоровый экземпляр заберёт задания себе, а сбой в нужном
+            экземпляре не проявится.
+
     Returns:
-        Отчёт по обращению, счётчики оркестратора и процесс агента-ответчика,
-        остановленный на следующей фазе.
+        Отчёт по обращению и счётчики оркестратора.
     """
     print()
     print("=" * 78)
     print(phase.title)
     print("=" * 78)
 
-    if responder is not None:
-        stop_agent(responder)
-    started = start_agent("responder", phase.responder_env)
+    pool.stop(RESPONDER_KEY)
+    pool.start("responder", RESPONDER_INSTANCE, phase.responder_env)
     await asyncio.sleep(1.0)
 
     metrics = MetricsCollector()
@@ -156,7 +110,7 @@ async def run_phase(
         print(f"    ответ            {(report.get('answer') or '')[:60]}...")
     print()
 
-    return report, totals, started
+    return report, totals
 
 
 async def main() -> int:
@@ -172,7 +126,7 @@ async def main() -> int:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
 
     print("Сборка агентов")
-    build_agents()
+    build_agents(AGENTS)
 
     connection = NatsConnection(settings.nats_url)
     try:
@@ -184,11 +138,9 @@ async def main() -> int:
 
     print()
     print("Запуск постоянных агентов")
-    # Агент-ответчик здесь не запускается: в каждой фазе он стартует заново
-    # со своими настройками сбоя. Если держать ещё один здоровый экземпляр,
-    # он встанет в ту же группу очереди и заберёт задания себе, а сбой в
-    # нужном экземпляре так и не проявится.
-    processes = [start_agent(name, {}) for name in HEALTHY_AGENTS]
+    pool = AgentPool()
+    for name in HEALTHY_AGENTS:
+        pool.start(name, f"{name}-task6")
     await asyncio.sleep(1.5)
 
     phases = [
@@ -220,10 +172,9 @@ async def main() -> int:
     ]
 
     failures = 0
-    responder: subprocess.Popen[bytes] | None = None
     try:
         for phase in phases:
-            report, totals, responder = await run_phase(connection, phase, responder)
+            report, totals = await run_phase(connection, phase, pool)
 
             if totals["retries"] != phase.expect_retries:
                 failures += 1
@@ -238,10 +189,7 @@ async def main() -> int:
                     f"ожидалось {phase.expect_success}"
                 )
     finally:
-        for process in processes:
-            stop_agent(process)
-        if responder is not None:
-            stop_agent(responder)
+        pool.stop_all()
         await connection.close()
 
     print()

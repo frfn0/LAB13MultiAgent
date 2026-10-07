@@ -64,6 +64,10 @@ type Result struct {
 	TaskID string `json:"task_id"`
 	// Agent - имя агента, обработавшего задание.
 	Agent string `json:"agent"`
+	// Instance - идентификатор конкретного экземпляра агента. Нужен, чтобы
+	// видеть, какой из нескольких одинаковых агентов выполнил задание,
+	// - см. задание 7 о балансировке нагрузки.
+	Instance string `json:"instance,omitempty"`
 	// Success - удалось ли обработать задание.
 	Success bool `json:"success"`
 	// Error - описание ошибки при Success = false.
