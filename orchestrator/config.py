@@ -43,6 +43,10 @@ class Settings(BaseSettings):
     # Повторять ли задание, если агент ответил ошибкой, а не промолчал.
     retry_on_agent_error: bool = True
 
+    # Где поднимать REST API из задания 8.
+    api_host: str = "127.0.0.1"
+    api_port: int = 8000
+
     log_level: str = "INFO"
     log_file: str = ""
 
