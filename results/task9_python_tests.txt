@@ -1,0 +1,41 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.10.6, pytest-9.0.3, pluggy-1.6.0
+rootdir: D:\PythonCodes\methods_and_tech\lab13
+configfile: pytest.ini
+plugins: allure-pytest-2.16.2, anyio-4.13.0, asyncio-1.4.0, cov-7.1.0, html-3.2.0, metadata-3.1.1
+asyncio: mode=auto, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 101 items
+
+tests\test_api.py .......................                                [ 22%]
+tests\test_client.py ...............                                     [ 37%]
+tests\test_messages.py ............                                      [ 49%]
+tests\test_metrics.py .............                                      [ 62%]
+tests\test_pipeline.py ................                                  [ 78%]
+tests\test_retry.py ......................                               [100%]
+
+=============================== tests coverage ================================
+_______________ coverage: platform win32, python 3.10.6-final-0 _______________
+
+Name                             Stmts   Miss  Cover
+----------------------------------------------------
+api\app.py                          68      9    87%
+api\demo_api.py                    163    163     0%
+api\main.py                         24     24     0%
+api\schemas.py                      42      0   100%
+api\state.py                        97     14    86%
+orchestrator\__init__.py             0      0   100%
+orchestrator\client.py             108      8    93%
+orchestrator\config.py              25      0   100%
+orchestrator\demo_instances.py     134    134     0%
+orchestrator\demo_metrics.py        95     95     0%
+orchestrator\demo_pipeline.py       50     50     0%
+orchestrator\demo_retry.py          98     98     0%
+orchestrator\harness.py             50     50     0%
+orchestrator\main.py                71     71     0%
+orchestrator\messages.py            60      0   100%
+orchestrator\metrics.py             89      4    96%
+orchestrator\pipeline.py            75      5    93%
+orchestrator\retry.py               67      3    96%
+----------------------------------------------------
+TOTAL                             1316    728    45%
+============================= 101 passed in 3.92s =============================

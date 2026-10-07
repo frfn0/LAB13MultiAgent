@@ -1,0 +1,277 @@
+﻿=== RUN   TestClassify
+=== PAUSE TestClassify
+=== RUN   TestHandleTaskRejectsEmptyText
+=== PAUSE TestHandleTaskRejectsEmptyText
+=== RUN   TestHandleTaskReturnsClassification
+=== PAUSE TestHandleTaskReturnsClassification
+=== RUN   TestRulesOrderMatters
+=== PAUSE TestRulesOrderMatters
+=== CONT  TestClassify
+=== RUN   TestClassify/ошибка_сайта_важнее_оплаты
+=== PAUSE TestClassify/ошибка_сайта_важнее_оплаты
+=== RUN   TestClassify/оплата
+=== PAUSE TestClassify/оплата
+=== RUN   TestClassify/доступ_в_аккаунт
+=== PAUSE TestClassify/доступ_в_аккаунт
+=== RUN   TestClassify/ошибка_важнее_всего
+=== PAUSE TestClassify/ошибка_важнее_всего
+=== RUN   TestClassify/доставка
+=== PAUSE TestClassify/доставка
+=== RUN   TestClassify/непонятное_обращение
+=== PAUSE TestClassify/непонятное_обращение
+=== RUN   TestClassify/регистр_не_важен
+=== PAUSE TestClassify/регистр_не_важен
+=== RUN   TestClassify/латиница
+=== PAUSE TestClassify/латиница
+=== CONT  TestClassify/ошибка_сайта_важнее_оплаты
+=== CONT  TestRulesOrderMatters
+--- PASS: TestRulesOrderMatters (0.00s)
+=== CONT  TestHandleTaskReturnsClassification
+--- PASS: TestHandleTaskReturnsClassification (0.00s)
+=== CONT  TestHandleTaskRejectsEmptyText
+=== RUN   TestHandleTaskRejectsEmptyText/перевод_строки
+=== PAUSE TestHandleTaskRejectsEmptyText/перевод_строки
+=== RUN   TestHandleTaskRejectsEmptyText/пробелы_и_табуляции
+=== PAUSE TestHandleTaskRejectsEmptyText/пробелы_и_табуляции
+=== RUN   TestHandleTaskRejectsEmptyText/пустой_текст
+=== PAUSE TestHandleTaskRejectsEmptyText/пустой_текст
+=== RUN   TestHandleTaskRejectsEmptyText/только_пробелы
+=== PAUSE TestHandleTaskRejectsEmptyText/только_пробелы
+=== CONT  TestHandleTaskRejectsEmptyText/перевод_строки
+=== CONT  TestClassify/латиница
+=== CONT  TestClassify/регистр_не_важен
+=== CONT  TestClassify/непонятное_обращение
+=== CONT  TestClassify/доставка
+=== CONT  TestClassify/ошибка_важнее_всего
+=== CONT  TestClassify/доступ_в_аккаунт
+=== CONT  TestClassify/оплата
+--- PASS: TestClassify (0.00s)
+    --- PASS: TestClassify/ошибка_сайта_важнее_оплаты (0.00s)
+    --- PASS: TestClassify/латиница (0.00s)
+    --- PASS: TestClassify/регистр_не_важен (0.00s)
+    --- PASS: TestClassify/непонятное_обращение (0.00s)
+    --- PASS: TestClassify/доставка (0.00s)
+    --- PASS: TestClassify/ошибка_важнее_всего (0.00s)
+    --- PASS: TestClassify/доступ_в_аккаунт (0.00s)
+    --- PASS: TestClassify/оплата (0.00s)
+=== CONT  TestHandleTaskRejectsEmptyText/только_пробелы
+=== CONT  TestHandleTaskRejectsEmptyText/пустой_текст
+=== CONT  TestHandleTaskRejectsEmptyText/пробелы_и_табуляции
+--- PASS: TestHandleTaskRejectsEmptyText (0.00s)
+    --- PASS: TestHandleTaskRejectsEmptyText/перевод_строки (0.00s)
+    --- PASS: TestHandleTaskRejectsEmptyText/только_пробелы (0.00s)
+    --- PASS: TestHandleTaskRejectsEmptyText/пустой_текст (0.00s)
+    --- PASS: TestHandleTaskRejectsEmptyText/пробелы_и_табуляции (0.00s)
+PASS
+ok  	github.com/frfn0/LAB13MultiAgent/agents/classifier	(cached)
+=== RUN   TestGenerateIDContainsTicketID
+=== PAUSE TestGenerateIDContainsTicketID
+=== RUN   TestGenerateIDIsUnique
+=== PAUSE TestGenerateIDIsUnique
+=== RUN   TestGenerateIDFormat
+=== PAUSE TestGenerateIDFormat
+=== CONT  TestGenerateIDContainsTicketID
+--- PASS: TestGenerateIDContainsTicketID (0.00s)
+=== CONT  TestGenerateIDFormat
+--- PASS: TestGenerateIDFormat (0.00s)
+=== CONT  TestGenerateIDIsUnique
+--- PASS: TestGenerateIDIsUnique (0.00s)
+PASS
+ok  	github.com/frfn0/LAB13MultiAgent/agents/escalation	(cached)
+=== RUN   TestSignificantWordsDropsShortAndServiceWords
+=== PAUSE TestSignificantWordsDropsShortAndServiceWords
+=== RUN   TestSignificantWordsIgnoresPunctuation
+=== PAUSE TestSignificantWordsIgnoresPunctuation
+=== RUN   TestCommonPrefixLength
+=== PAUSE TestCommonPrefixLength
+=== RUN   TestSameWordComparesByStem
+=== PAUSE TestSameWordComparesByStem
+=== RUN   TestSameWordRequiresLongEnoughMatch
+=== PAUSE TestSameWordRequiresLongEnoughMatch
+=== RUN   TestSearchFindsArticle
+=== PAUSE TestSearchFindsArticle
+=== RUN   TestHandleTaskRejectsUnrelatedText
+--- PASS: TestHandleTaskRejectsUnrelatedText (0.00s)
+=== RUN   TestHandleTaskRequiresLoadedBase
+--- PASS: TestHandleTaskRequiresLoadedBase (0.00s)
+=== RUN   TestHandleTaskRejectsEmptyText
+--- PASS: TestHandleTaskRejectsEmptyText (0.00s)
+=== RUN   TestCategoryBoost
+=== PAUSE TestCategoryBoost
+=== RUN   TestRoundScore
+=== PAUSE TestRoundScore
+=== CONT  TestSignificantWordsDropsShortAndServiceWords
+=== CONT  TestSameWordRequiresLongEnoughMatch
+=== CONT  TestSearchFindsArticle
+--- PASS: TestSignificantWordsDropsShortAndServiceWords (0.00s)
+--- PASS: TestSameWordRequiresLongEnoughMatch (0.00s)
+=== CONT  TestSignificantWordsIgnoresPunctuation
+--- PASS: TestSignificantWordsIgnoresPunctuation (0.00s)
+=== CONT  TestSameWordComparesByStem
+--- PASS: TestSameWordComparesByStem (0.00s)
+=== CONT  TestCategoryBoost
+=== CONT  TestCommonPrefixLength
+--- PASS: TestCommonPrefixLength (0.00s)
+=== CONT  TestRoundScore
+--- PASS: TestRoundScore (0.00s)
+=== RUN   TestSearchFindsArticle/оплатить_находит_статью_про_оплату
+=== PAUSE TestSearchFindsArticle/оплатить_находит_статью_про_оплату
+=== RUN   TestSearchFindsArticle/курьер_находит_статью_про_доставку
+=== PAUSE TestSearchFindsArticle/курьер_находит_статью_про_доставку
+=== RUN   TestSearchFindsArticle/пароль_находит_статью_про_доступ
+=== PAUSE TestSearchFindsArticle/пароль_находит_статью_про_доступ
+=== CONT  TestSearchFindsArticle/оплатить_находит_статью_про_оплату
+=== CONT  TestSearchFindsArticle/пароль_находит_статью_про_доступ
+=== CONT  TestSearchFindsArticle/курьер_находит_статью_про_доставку
+--- PASS: TestSearchFindsArticle (0.00s)
+    --- PASS: TestSearchFindsArticle/оплатить_находит_статью_про_оплату (0.00s)
+    --- PASS: TestSearchFindsArticle/пароль_находит_статью_про_доступ (0.00s)
+    --- PASS: TestSearchFindsArticle/курьер_находит_статью_про_доставку (0.00s)
+--- PASS: TestCategoryBoost (0.00s)
+PASS
+ok  	github.com/frfn0/LAB13MultiAgent/agents/knowledge	(cached)
+=== RUN   TestResolvedAnswerUsesArticleSolution
+=== PAUSE TestResolvedAnswerUsesArticleSolution
+=== RUN   TestResolvedAnswerAddsCategoryHint
+=== PAUSE TestResolvedAnswerAddsCategoryHint
+=== RUN   TestDeferredAnswerForOtherCategory
+=== PAUSE TestDeferredAnswerForOtherCategory
+=== RUN   TestDeferredAnswerMarksUrgent
+=== PAUSE TestDeferredAnswerMarksUrgent
+=== RUN   TestHandleTaskChoosesAnswerType
+=== PAUSE TestHandleTaskChoosesAnswerType
+=== RUN   TestHandleTaskRejectsEmptyText
+=== PAUSE TestHandleTaskRejectsEmptyText
+=== CONT  TestResolvedAnswerUsesArticleSolution
+=== CONT  TestDeferredAnswerForOtherCategory
+--- PASS: TestResolvedAnswerUsesArticleSolution (0.00s)
+=== CONT  TestResolvedAnswerAddsCategoryHint
+=== CONT  TestHandleTaskChoosesAnswerType
+=== CONT  TestDeferredAnswerMarksUrgent
+=== CONT  TestHandleTaskRejectsEmptyText
+=== RUN   TestHandleTaskChoosesAnswerType/статья_найдена
+=== PAUSE TestHandleTaskChoosesAnswerType/статья_найдена
+=== RUN   TestHandleTaskChoosesAnswerType/статья_не_найдена
+=== PAUSE TestHandleTaskChoosesAnswerType/статья_не_найдена
+=== CONT  TestHandleTaskChoosesAnswerType/статья_найдена
+--- PASS: TestDeferredAnswerForOtherCategory (0.00s)
+--- PASS: TestResolvedAnswerAddsCategoryHint (0.00s)
+=== CONT  TestHandleTaskChoosesAnswerType/статья_не_найдена
+--- PASS: TestDeferredAnswerMarksUrgent (0.00s)
+--- PASS: TestHandleTaskRejectsEmptyText (0.00s)
+--- PASS: TestHandleTaskChoosesAnswerType (0.00s)
+    --- PASS: TestHandleTaskChoosesAnswerType/статья_найдена (0.00s)
+    --- PASS: TestHandleTaskChoosesAnswerType/статья_не_найдена (0.00s)
+PASS
+ok  	github.com/frfn0/LAB13MultiAgent/agents/responder	(cached)
+=== RUN   TestNewRequiresHandler
+=== PAUSE TestNewRequiresHandler
+=== RUN   TestLoadConfigReadsEnvironment
+--- PASS: TestLoadConfigReadsEnvironment (0.00s)
+=== RUN   TestLoadConfigRejectsBadValues
+=== RUN   TestLoadConfigRejectsBadValues/интервал_метрик
+=== RUN   TestLoadConfigRejectsBadValues/число_сбоев
+=== RUN   TestLoadConfigRejectsBadValues/задержка_сбоя
+--- PASS: TestLoadConfigRejectsBadValues (0.00s)
+    --- PASS: TestLoadConfigRejectsBadValues/интервал_метрик (0.00s)
+    --- PASS: TestLoadConfigRejectsBadValues/число_сбоев (0.00s)
+    --- PASS: TestLoadConfigRejectsBadValues/задержка_сбоя (0.00s)
+=== RUN   TestLoadConfigRequiresNameAndSubject
+=== PAUSE TestLoadConfigRequiresNameAndSubject
+=== RUN   TestHandleMessageSuccess
+=== PAUSE TestHandleMessageSuccess
+=== RUN   TestPrepareResultKeepsExplicitInstance
+=== PAUSE TestPrepareResultKeepsExplicitInstance
+=== RUN   TestHandleMessageHandlerError
+=== PAUSE TestHandleMessageHandlerError
+=== RUN   TestHandleMessageBrokenJSON
+=== PAUSE TestHandleMessageBrokenJSON
+=== RUN   TestHandleMessageWithoutTicketID
+=== PAUSE TestHandleMessageWithoutTicketID
+=== RUN   TestFaultFailAttempts
+=== PAUSE TestFaultFailAttempts
+=== RUN   TestFaultDropKeepsSilence
+=== PAUSE TestFaultDropKeepsSilence
+=== RUN   TestFaultDelay
+=== PAUSE TestFaultDelay
+=== RUN   TestPublishWithoutConnection
+=== PAUSE TestPublishWithoutConnection
+=== RUN   TestNewLoggerWritesFile
+=== PAUSE TestNewLoggerWritesFile
+=== RUN   TestDefaultInstanceID
+--- PASS: TestDefaultInstanceID (0.00s)
+=== RUN   TestEnvOrFallback
+--- PASS: TestEnvOrFallback (0.00s)
+=== CONT  TestNewRequiresHandler
+--- PASS: TestNewRequiresHandler (0.00s)
+=== CONT  TestHandleMessageBrokenJSON
+=== CONT  TestHandleMessageWithoutTicketID
+=== CONT  TestPrepareResultKeepsExplicitInstance
+=== CONT  TestHandleMessageSuccess
+--- PASS: TestPrepareResultKeepsExplicitInstance (0.00s)
+=== CONT  TestHandleMessageHandlerError
+=== CONT  TestLoadConfigRequiresNameAndSubject
+=== CONT  TestNewLoggerWritesFile
+--- PASS: TestLoadConfigRequiresNameAndSubject (0.00s)
+=== CONT  TestFaultDelay
+=== CONT  TestPublishWithoutConnection
+=== CONT  TestFaultFailAttempts
+time=2026-10-07T20:36:23.188+03:00 level=WARN msg="результат не отправлен: нет соединения с NATS" task_id=task-4
+time=2026-10-07T20:36:23.188+03:00 level=WARN msg="искусственный сбой агента" task_id=task-fault ticket=ticket-fault fail_attempts=2
+time=2026-10-07T20:36:23.188+03:00 level=ERROR msg="в задании нет идентификатора тикета" task_id=task-3
+time=2026-10-07T20:36:23.226+03:00 level=WARN msg="результат не отправлен: нет соединения с NATS" task_id=task-3
+=== CONT  TestFaultDropKeepsSilence
+time=2026-10-07T20:36:23.226+03:00 level=WARN msg="результат не отправлен: нет соединения с NATS" task_id=task-fault
+time=2026-10-07T20:36:23.188+03:00 level=ERROR msg="задание не выполнено" task_id=task-2 ticket=ticket-2 error="искусственный сбой агента для проверки повторов"
+time=2026-10-07T20:36:23.226+03:00 level=WARN msg="искусственный сбой агента" task_id=task-fault ticket=ticket-fault fail_attempts=2
+time=2026-10-07T20:36:23.188+03:00 level=INFO msg="задание выполнено" task_id=task-1 ticket=ticket-1 elapsed_ms=0
+time=2026-10-07T20:36:23.226+03:00 level=WARN msg="ответ на задание не будет отправлен" task_id=task-drop ticket=ticket-drop reason=FAULT_DROP
+time=2026-10-07T20:36:23.226+03:00 level=WARN msg="результат не отправлен: нет соединения с NATS" task_id=task-fault
+time=2026-10-07T20:36:23.226+03:00 level=WARN msg="результат не отправлен: нет соединения с NATS" task_id=task-2
+time=2026-10-07T20:36:23.226+03:00 level=WARN msg="результат не отправлен: нет соединения с NATS" task_id=task-1
+time=2026-10-07T20:36:23.188+03:00 level=ERROR msg="задание не разобрано" error="invalid character 'Ð' looking for beginning of object key string"
+time=2026-10-07T20:36:23.226+03:00 level=WARN msg="результат не отправлен: нет соединения с NATS" task_id=""
+time=2026-10-07T20:36:23.189+03:00 level=INFO msg="проверка записи в файл" agent=test-agent
+time=2026-10-07T20:36:23.226+03:00 level=INFO msg="задание выполнено" task_id=task-fault ticket=ticket-fault elapsed_ms=0
+time=2026-10-07T20:36:23.226+03:00 level=WARN msg="результат не отправлен: нет соединения с NATS" task_id=task-fault
+--- PASS: TestPublishWithoutConnection (0.04s)
+time=2026-10-07T20:36:23.226+03:00 level=INFO msg="задание выполнено" task_id=task-fault ticket=ticket-fault elapsed_ms=0
+--- PASS: TestHandleMessageWithoutTicketID (0.04s)
+time=2026-10-07T20:36:23.226+03:00 level=WARN msg="результат не отправлен: нет соединения с NATS" task_id=task-fault
+--- PASS: TestFaultDropKeepsSilence (0.00s)
+--- PASS: TestFaultFailAttempts (0.04s)
+--- PASS: TestHandleMessageBrokenJSON (0.04s)
+--- PASS: TestHandleMessageHandlerError (0.04s)
+--- PASS: TestHandleMessageSuccess (0.04s)
+time=2026-10-07T20:36:23.229+03:00 level=INFO msg="задание выполнено" task_id=task-slow ticket=ticket-slow elapsed_ms=0
+time=2026-10-07T20:36:23.229+03:00 level=WARN msg="результат не отправлен: нет соединения с NATS" task_id=task-slow
+--- PASS: TestFaultDelay (0.04s)
+--- PASS: TestNewLoggerWritesFile (0.05s)
+PASS
+ok  	github.com/frfn0/LAB13MultiAgent/pkg/agent	(cached)
+=== RUN   TestTaskJSONRoundTrip
+=== PAUSE TestTaskJSONRoundTrip
+=== RUN   TestResultOmitsEmptyFields
+=== PAUSE TestResultOmitsEmptyFields
+=== RUN   TestResultKeepsInstance
+=== PAUSE TestResultKeepsInstance
+=== RUN   TestResultParsesAgentError
+=== PAUSE TestResultParsesAgentError
+=== RUN   TestMetricsJSON
+=== PAUSE TestMetricsJSON
+=== RUN   TestSubjectsAreStable
+=== PAUSE TestSubjectsAreStable
+=== CONT  TestTaskJSONRoundTrip
+=== CONT  TestResultParsesAgentError
+=== CONT  TestResultKeepsInstance
+=== CONT  TestResultOmitsEmptyFields
+=== CONT  TestSubjectsAreStable
+--- PASS: TestSubjectsAreStable (0.00s)
+=== CONT  TestMetricsJSON
+--- PASS: TestResultParsesAgentError (0.00s)
+--- PASS: TestMetricsJSON (0.00s)
+--- PASS: TestResultKeepsInstance (0.00s)
+--- PASS: TestResultOmitsEmptyFields (0.00s)
+--- PASS: TestTaskJSONRoundTrip (0.00s)
+PASS
+ok  	github.com/frfn0/LAB13MultiAgent/pkg/messages	(cached)
